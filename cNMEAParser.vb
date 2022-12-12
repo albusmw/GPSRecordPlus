@@ -137,7 +137,8 @@ Public Class cNMEAParser
                     '(12) g	                    Einheit der geoidal separation (Meter)
                     '(13) A.A	                Alter des DGPS-Datensatzes
                     '(14) RRRR	                DGPS-Referenzstation (0000 bis 1023)
-                    MyUTC = New TimeSpan(0, CInt(AllSplit(1).Substring(0, 2)), CInt(AllSplit(1).Substring(2, 2)), CInt(AllSplit(1).Substring(4, 2)), CInt(AllSplit(1).Substring(7, 3)))
+                    If AllSplit(1).Length = 9 Then MyUTC = New TimeSpan(0, CInt(AllSplit(1).Substring(0, 2)), CInt(AllSplit(1).Substring(2, 2)), CInt(AllSplit(1).Substring(4, 2)), CInt(AllSplit(1).Substring(7, 2)))
+
                     If AllSplit(2).Length > 0 Then MyLatitude = CInt(AllSplit(2).Substring(0, 2)) + (Val(AllSplit(2).Substring(2)) / 60)
                     If AllSplit(3) = "S" Then MyLatitude = -MyLatitude
                     If AllSplit(4).Length > 0 Then MyLongitude = CInt(AllSplit(4).Substring(0, 3)) + (Val(AllSplit(4).Substring(3)) / 60)
@@ -153,7 +154,15 @@ Public Class cNMEAParser
                     MyHDOP = Val(AllSplit(8))
                     MyHeight = Val(AllSplit(9))
                 Case "GSV"
-                    'Satellite information
+                    'GPS Satellites in view
+                    '$GPGSV,3,2,11,14,25,170,00,16,57,208,39,18,67,296,40,19,40,246,00*74
+                    '(1) Total number of messages of this type in this cycle
+                    '(2) Message number
+                    '(3) Total number of SVs in view
+                    '(04-08-12-16) SV PRN number
+                    '(05-09-13-17) Elevation in degrees, 90 maximum
+                    '(06-10-14-18) Azimuth, degrees from true north, 000 to 359
+                    '(07-11-15-19) SNR, 00-99 dB (null when not tracking)
                     Dim SVType As eSVType = eSVType.Unknown
                     Select Case TalkerID
                         Case "GP" : SVType = eSVType.GPS
@@ -162,7 +171,7 @@ Public Class cNMEAParser
                         Case "GB", "BD" : SVType = eSVType.BeiDou
                         Case Else : SVType = eSVType.Unknown
                     End Select
-                    'Delete existing list
+                    'Delete existing list if 1st message is received
                     If CInt(AllSplit(2)) = 1 Then
                         Select Case SVType
                             Case eSVType.GPS
@@ -176,17 +185,21 @@ Public Class cNMEAParser
                         End Select
                     End If
                     If AllSplit(3).Contains("*") = False Then
-                        Dim Ptr As Integer = 0
-                        Do
-                            Ptr += 4
-                            Dim Entry As New sGSVInfo
-                            Entry.SV_Type = SVType
-                            Entry.SV_PRN = GetSVInt(AllSplit(Ptr))
-                            Entry.Elevation = GetSVInt(AllSplit(Ptr + 1))
-                            Entry.Azimuth = GetSVInt(AllSplit(Ptr + 2))
-                            Entry.SNR = GetSVInt(AllSplit(Ptr + 3))
-                            AllSVs.Add(Entry)
-                        Loop Until AllSplit(Ptr + 3).Contains("*")
+                        'Proceed if there at least 1 sat
+                        If CInt(AllSplit(3)) > 0 Then
+                            Dim Ptr As Integer = 0
+                            Do
+                                Ptr += 4
+                                Dim Entry As New sGSVInfo
+                                Entry.SV_Type = SVType
+                                Entry.SV_PRN = GetSVInt(AllSplit(Ptr))
+                                Entry.Elevation = GetSVInt(AllSplit(Ptr + 1))
+                                Entry.Azimuth = GetSVInt(AllSplit(Ptr + 2))
+                                Entry.SNR = GetSVInt(AllSplit(Ptr + 3))
+                                AllSVs.Add(Entry)
+                                If (Ptr + 4 + 4 > AllSplit.Length) Then Exit Do
+                            Loop Until (AllSplit(Ptr + 3).Contains("*"))
+                        End If
                     End If
                 Case "RMC"
                     MySpeed = Val(AllSplit(7)) * 1.852

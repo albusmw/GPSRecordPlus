@@ -1,5 +1,6 @@
 ﻿Option Explicit On
 Option Strict On
+Imports System.Device.Location
 
 Public Class MainForm
 
@@ -7,7 +8,7 @@ Public Class MainForm
 
     Private WithEvents DB As New cDB
 
-    Private watcher As Device.Location.GeoCoordinateWatcher
+    Private WithEvents watcher As Device.Location.GeoCoordinateWatcher
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         mpMap.CacheFolder = IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MapControl")
@@ -17,6 +18,8 @@ Public Class MainForm
         watcher = New Device.Location.GeoCoordinateWatcher
         AddHandler watcher.StatusChanged, AddressOf Watcher_StatusChanged
         watcher.Start()
+
+        pgMain.SelectedObject = DB
 
     End Sub
 
@@ -49,7 +52,7 @@ Public Class MainForm
 
         Dim Pos As New GeoPoint(CSng(DB.NMEAParser.Longitude), CSng(DB.NMEAParser.Latitude))
         mpMap.Markers(0).Point = Pos
-        If cbAutoCenter.Checked Then mpMap.Center = Pos
+        If DB.AutoCenterMap = True Then mpMap.Center = Pos
 
         System.Windows.Forms.Application.DoEvents()
     End Sub
@@ -78,26 +81,6 @@ Public Class MainForm
         Return New Marker(New GeoPoint(0, 0), HereStyle, "HERE")
     End Function
 
-    Private Sub Watcher_StatusChanged(sender As Object, e As Device.Location.GeoPositionStatusChangedEventArgs)
-        Select Case e.Status
-            Case Device.Location.GeoPositionStatus.Disabled
-                tsslWinPosition.Text = "Pos: DISABLED"
-            Case Device.Location.GeoPositionStatus.Initializing
-                tsslWinPosition.Text = "Pos: Initializing ..."
-            Case Device.Location.GeoPositionStatus.NoData
-                tsslWinPosition.Text = "Pos: ??? (no data)"
-            Case Device.Location.GeoPositionStatus.Ready
-                Using Pos As Device.Location.GeoCoordinateWatcher = CType(sender, Device.Location.GeoCoordinateWatcher)
-                    If Pos.Position.Location.IsUnknown Then
-                        tsslWinPosition.Text = "Pos: UNKNOWN"
-                    Else
-                        tsslWinPosition.Text = "Pos: " & Pos.Position.Location.Latitude.ToString.Trim & ":" & Pos.Position.Location.Longitude.ToString.Trim & ", " & Pos.Position.Location.HorizontalAccuracy.ToString.Trim & " Acu"
-                    End If
-                End Using
-
-        End Select
-    End Sub
-
     Private Sub tUpdateTCP_Tick(sender As Object, e As EventArgs) Handles tUpdateTCP.Tick
         'DB.SendNMEAViaTCP("$GNRMC,092548.500,A,4752.702033,N,01141.486644,E,0.13,230.34,050721,,,A*")
     End Sub
@@ -106,6 +89,41 @@ Public Class MainForm
         DB.TCP_ConnectionListener = New Net.Sockets.TcpListener(Net.IPAddress.Loopback, DB.Network_TCP)
         DB.TCP_ConnectionListener.Start()
         DB.TCPServer.DoBeginAcceptTcpClient(DB.TCP_ConnectionListener)
+    End Sub
+
+    Private Sub tsmiFile_End_Click(sender As Object, e As EventArgs) Handles tsmiFile_End.Click
+        End
+    End Sub
+
+    Private Sub tsmiFile_EXELocation_Click(sender As Object, e As EventArgs) Handles tsmiFile_EXELocation.Click
+        Diagnostics.Process.Start(DB.MyPath)
+    End Sub
+
+    Private Sub watcher_StatusChanged(sender As Object, e As GeoPositionStatusChangedEventArgs) Handles watcher.StatusChanged
+        Select Case e.Status
+            Case Device.Location.GeoPositionStatus.Disabled
+                tsslWinPosition.Text = "Pos: DISABLED"
+            Case Device.Location.GeoPositionStatus.Initializing
+                tsslWinPosition.Text = "Pos: Initializing ..."
+            Case Device.Location.GeoPositionStatus.NoData
+                tsslWinPosition.Text = "Pos: ??? (no data)"
+            Case Device.Location.GeoPositionStatus.Ready
+                'Using Pos As Device.Location.GeoCoordinateWatcher = CType(sender, Device.Location.GeoCoordinateWatcher)
+                '    If Pos.Position.Location.IsUnknown Then
+                '        tsslWinPosition.Text = "Pos: UNKNOWN"
+                '    Else
+                '        tsslWinPosition.Text = "Pos: " & Pos.Position.Location.Latitude.ToString.Trim & ":" & Pos.Position.Location.Longitude.ToString.Trim & ", " & Pos.Position.Location.HorizontalAccuracy.ToString.Trim & " Acu"
+                '    End If
+                'End Using
+        End Select
+    End Sub
+
+    Private Sub watcher_PositionChanged(sender As Object, e As GeoPositionChangedEventArgs(Of GeoCoordinate)) Handles watcher.PositionChanged
+        If e.Position.Location.IsUnknown Then
+            tsslWinPosition.Text = "Pos: UNKNOWN"
+        Else
+            tsslWinPosition.Text = "Pos: " & e.Position.Location.Latitude.ToString.Trim & ":" & e.Position.Location.Longitude.ToString.Trim & ", " & e.Position.Location.HorizontalAccuracy.ToString.Trim & " Acu"
+        End If
     End Sub
 
 End Class
